@@ -59,7 +59,7 @@ impl<'a> WithDir<'a> {
     /// Get that path that was changed to when this instance
     /// was created
     pub fn path(&self) -> &Path {
-        return &self.cwd;
+        &self.cwd
     }
 }
 
