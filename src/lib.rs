@@ -1,3 +1,6 @@
+//! Library provides the struct [WithDir](crate::WithDir) which uses RAII
+//! to enable scoped change of working directory. See docs for [WithDir](crate::WithDir)
+//! for simple example.
 use parking_lot::{ReentrantMutex, ReentrantMutexGuard};
 use std::{
     env::{current_dir, set_current_dir},
@@ -27,14 +30,15 @@ static DIR_MUTEX: ReentrantMutex<PhantomData<u8>> = ReentrantMutex::new(PhantomD
 /// let path = dir.path();
 ///
 /// // enter that directory
-/// if let Ok(_) = WithDir::new(path) {
-///     // ... cwd == path
+/// if let Ok(cwd) = WithDir::new(path) {
+///     // Current working directory is now path
 /// };
 ///
 /// // cwd is reset
 /// ```
 pub struct WithDir<'a> {
     original_dir: PathBuf,
+    cwd: PathBuf,
     _mutex: ReentrantMutexGuard<'a, PhantomData<u8>>,
 }
 
@@ -47,8 +51,15 @@ impl<'a> WithDir<'a> {
         set_current_dir(path)?;
         Ok(WithDir {
             original_dir,
+            cwd: path.to_path_buf(),
             _mutex: m,
         })
+    }
+
+    /// Get that path that was changed to when this instance
+    /// was created
+    pub fn path(&self) -> &Path {
+        return &self.cwd;
     }
 }
 
@@ -80,11 +91,10 @@ mod tests {
             Ok(_) => {
                 let cwd = current_dir().unwrap();
                 assert_eq!(cwd, a);
-                if let Ok(_) = WithDir::new(&b) {
+                {
+                    let wd = WithDir::new(&b).unwrap();
                     let cwd = current_dir().unwrap();
-                    assert_eq!(cwd, b);
-                } else {
-                    panic!("failed to change directory");
+                    assert_eq!(cwd, wd.path());
                 };
                 let cwd = current_dir().unwrap();
                 assert_eq!(cwd, a);
@@ -109,9 +119,10 @@ mod tests {
                 let cwd = current_dir().unwrap();
                 assert_eq!(cwd, a);
 
-                if let Ok(_) = WithDir::new(&b) {
+                {
+                    let wd = WithDir::new(&b).unwrap();
                     let cwd = current_dir().unwrap();
-                    assert_eq!(cwd, b);
+                    assert_eq!(cwd, wd.path());
                 };
 
                 let cwd = current_dir().unwrap();

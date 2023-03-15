@@ -1,6 +1,19 @@
 # with_dir
 
-Blazingly fast utility library for temporarily changing the current working directory. See docs for examples.
+Blazingly fast utility library for temporarily changing the current working directory.
+
+```rust
+use with_dir::WithDir;
+use std::path::Path;
+
+let path = Path::new("path/to/directory");
+
+// enter that directory
+if let Ok(cwd) = WithDir::new(path) {
+    // Current working directory is now path/to/directory
+};
+// cwd is reset
+```
 
 ## Contributing
 
