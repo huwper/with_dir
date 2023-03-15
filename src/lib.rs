@@ -4,11 +4,10 @@
 use parking_lot::{ReentrantMutex, ReentrantMutexGuard};
 use std::{
     env::{current_dir, set_current_dir},
-    marker::PhantomData,
     path::{Path, PathBuf},
 };
 
-static DIR_MUTEX: ReentrantMutex<PhantomData<u8>> = ReentrantMutex::new(PhantomData);
+static DIR_MUTEX: ReentrantMutex<()> = ReentrantMutex::new(());
 
 /// Scoped modifier of the current working directory. This uses RAII to set the
 /// current working directory back to what it was when the instance is dropped.
@@ -22,27 +21,34 @@ static DIR_MUTEX: ReentrantMutex<PhantomData<u8>> = ReentrantMutex::new(PhantomD
 ///
 /// ```
 /// use with_dir::WithDir;
-/// use tempdir::TempDir;
-/// use std::env::current_dir;
 ///
 /// // create a directory
-/// let dir = TempDir::new("demo").unwrap();
-/// let path = dir.path();
+/// let path = std::env::current_dir().unwrap().join("a");
+/// if !path.exists() {
+///     std::fs::create_dir(&path);
+/// }
 ///
 /// // enter that directory
-/// if let Ok(cwd) = WithDir::new(path) {
-///     // Current working directory is now path
-/// };
+/// WithDir::new(&path).map( |_| {
+///     assert_eq!(std::env::current_dir().unwrap(), path);
+/// }).unwrap();
 ///
 /// // cwd is reset
+///
+/// // enter it again
+/// let _cwd = WithDir::new(&path).unwrap();
+/// // exit it
+/// drop(_cwd);
 /// ```
+///
+///
 pub struct WithDir<'a> {
     original_dir: PathBuf,
     cwd: PathBuf,
-    _mutex: ReentrantMutexGuard<'a, PhantomData<u8>>,
+    _mutex: ReentrantMutexGuard<'a, ()>,
 }
 
-impl<'a> WithDir<'a> {
+impl WithDir<'_> {
     /// On creation, the current working directory is set to `path`
     /// and a `parking_lot::ReentrantMutexGuard` is claimed.
     pub fn new(path: &Path) -> Result<WithDir, std::io::Error> {
@@ -63,13 +69,22 @@ impl<'a> WithDir<'a> {
     }
 }
 
-impl<'a> Drop for WithDir<'a> {
+impl Drop for WithDir<'_> {
     /// Resets current working directory to whatever it was
     /// when this instance was created.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the original directory is no longer accesible (has been deleted, etc.)
     fn drop(&mut self) {
         set_current_dir(&self.original_dir).unwrap();
     }
 }
+
+// test the code in the readme
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
 
 #[cfg(test)]
 mod tests {
@@ -91,11 +106,12 @@ mod tests {
             Ok(_) => {
                 let cwd = current_dir().unwrap();
                 assert_eq!(cwd, a);
-                {
-                    let wd = WithDir::new(&b).unwrap();
-                    let cwd = current_dir().unwrap();
-                    assert_eq!(cwd, wd.path());
-                };
+                WithDir::new(&b)
+                    .map(|wd| {
+                        let cwd = current_dir().unwrap();
+                        assert_eq!(cwd, wd.path());
+                    })
+                    .unwrap();
                 let cwd = current_dir().unwrap();
                 assert_eq!(cwd, a);
             }
