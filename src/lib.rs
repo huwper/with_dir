@@ -9,7 +9,7 @@ static DIR_MUTEX: ReentrantMutex<PhantomData<u8>> = ReentrantMutex::new(PhantomD
 
 /// Scoped modifier of the current working directory. This uses RAII to set the
 /// current working directory back to what it was when the instance is dropped.
-/// This struct uses a static 'parking_lot::ReentrantMutex` to prevent `WithDir` on other
+/// This struct uses a static `parking_lot::ReentrantMutex` to prevent `WithDir` on other
 /// threads from updating the current working directory while any WithDir instances
 /// exist. However there is nothing stopping other threads from calling `std::env::set_current_dir`
 /// directly which would override the working directory.
