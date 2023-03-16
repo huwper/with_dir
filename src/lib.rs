@@ -36,16 +36,16 @@ static DIR_MUTEX: ReentrantMutex<()> = ReentrantMutex::new(());
 /// // cwd is reset
 ///
 /// // enter it again
-/// let _cwd = WithDir::new(&path).unwrap();
+/// let cwd = WithDir::new(&path).unwrap();
 /// // exit it
-/// drop(_cwd);
+/// cwd.leave().unwrap();
 /// ```
 ///
 ///
 pub struct WithDir<'a> {
     original_dir: PathBuf,
     cwd: PathBuf,
-    _mutex: ReentrantMutexGuard<'a, ()>,
+    mutex: Option<ReentrantMutexGuard<'a, ()>>,
 }
 
 impl WithDir<'_> {
@@ -58,7 +58,7 @@ impl WithDir<'_> {
         Ok(WithDir {
             original_dir,
             cwd: path.to_path_buf(),
-            _mutex: m,
+            mutex: Some(m),
         })
     }
 
@@ -66,6 +66,18 @@ impl WithDir<'_> {
     /// was created
     pub fn path(&self) -> &Path {
         &self.cwd
+    }
+
+    fn reset_cwd(&self) -> Result<(), std::io::Error> {
+        set_current_dir(&self.original_dir)
+    }
+
+    /// Return to original working directory. This is exactly the
+    /// same as dropping the instance but will not panic.
+    pub fn leave(mut self) -> Result<(), std::io::Error> {
+        let ret = self.reset_cwd();
+        self.mutex = None;
+        ret
     }
 }
 
@@ -77,7 +89,9 @@ impl Drop for WithDir<'_> {
     ///
     /// Panics if the original directory is no longer accesible (has been deleted, etc.)
     fn drop(&mut self) {
-        set_current_dir(&self.original_dir).unwrap();
+        if self.mutex.is_some() {
+            self.reset_cwd().unwrap();
+        }
     }
 }
 
@@ -140,6 +154,15 @@ mod tests {
                     let cwd = current_dir().unwrap();
                     assert_eq!(cwd, wd.path());
                 };
+
+                let cwd = current_dir().unwrap();
+                assert_eq!(cwd, a);
+
+                // test leave
+                let wd = WithDir::new(&b).unwrap();
+                let cwd = current_dir().unwrap();
+                assert_eq!(cwd, wd.path());
+                wd.leave().unwrap();
 
                 let cwd = current_dir().unwrap();
                 assert_eq!(cwd, a);
