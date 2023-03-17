@@ -4,10 +4,17 @@
 use parking_lot::{ReentrantMutex, ReentrantMutexGuard};
 use std::{
     env::{current_dir, set_current_dir},
+    fs::{create_dir, create_dir_all},
     path::{Path, PathBuf},
 };
+use tempfile::TempDir;
 
 static DIR_MUTEX: ReentrantMutex<()> = ReentrantMutex::new(());
+
+enum Cwd {
+    Temp(TempDir),
+    NotTemp(PathBuf),
+}
 
 /// Scoped modifier of the current working directory. This uses RAII to set the
 /// current working directory back to what it was when the instance is dropped.
@@ -44,11 +51,11 @@ static DIR_MUTEX: ReentrantMutex<()> = ReentrantMutex::new(());
 ///
 pub struct WithDir<'a> {
     original_dir: PathBuf,
-    cwd: PathBuf,
+    cwd: Cwd,
     mutex: Option<ReentrantMutexGuard<'a, ()>>,
 }
 
-impl WithDir<'_> {
+impl<'a> WithDir<'a> {
     /// On creation, the current working directory is set to `path`
     /// and a `parking_lot::ReentrantMutexGuard` is claimed.
     pub fn new(path: &Path) -> Result<WithDir, std::io::Error> {
@@ -57,7 +64,50 @@ impl WithDir<'_> {
         set_current_dir(path)?;
         Ok(WithDir {
             original_dir,
-            cwd: path.to_path_buf(),
+            cwd: Cwd::NotTemp(path.to_path_buf()),
+            mutex: Some(m),
+        })
+    }
+
+    /// Uses [TempDir](tempfile::TempDir) to create a temporary
+    /// directory that with the same lifetime as the returned
+    /// `WithDir`. The current working dir is change to the temp_dir
+    pub fn temp() -> Result<WithDir<'a>, std::io::Error> {
+        let m = DIR_MUTEX.lock();
+        let original_dir = current_dir()?;
+        let temp_dir = TempDir::new()?;
+        set_current_dir(temp_dir.path())?;
+        Ok(WithDir {
+            original_dir,
+            cwd: Cwd::Temp(temp_dir),
+            mutex: Some(m),
+        })
+    }
+
+    /// Makes a directory and changes the current working dir to that directory,
+    /// the directory will persist after this `WithDir` is dropped. Use
+    /// [create_all](crate::WithDir::create_all) if you want to also make the parent directories
+    pub fn create(path: &Path) -> Result<WithDir, std::io::Error> {
+        let m = DIR_MUTEX.lock();
+        let original_dir = current_dir()?;
+        create_dir(path)?;
+        set_current_dir(path)?;
+        Ok(WithDir {
+            original_dir,
+            cwd: Cwd::NotTemp(path.to_path_buf()),
+            mutex: Some(m),
+        })
+    }
+
+    /// See [create](crate::WithDir::create) for docs
+    pub fn create_all(path: &Path) -> Result<WithDir, std::io::Error> {
+        let m = DIR_MUTEX.lock();
+        let original_dir = current_dir()?;
+        create_dir_all(path)?;
+        set_current_dir(path)?;
+        Ok(WithDir {
+            original_dir,
+            cwd: Cwd::NotTemp(path.to_path_buf()),
             mutex: Some(m),
         })
     }
@@ -65,7 +115,10 @@ impl WithDir<'_> {
     /// Get that path that was changed to when this instance
     /// was created
     pub fn path(&self) -> &Path {
-        &self.cwd
+        match &self.cwd {
+            Cwd::NotTemp(p) => p,
+            Cwd::Temp(p) => p.path(),
+        }
     }
 
     fn reset_cwd(&self) -> Result<(), std::io::Error> {
