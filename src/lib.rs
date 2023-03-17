@@ -134,6 +134,14 @@ impl<'a> WithDir<'a> {
     }
 }
 
+impl AsRef<Path> for WithDir<'_> {
+    /// Returns the current working directory that was set when this
+    /// instance was created.
+    fn as_ref(&self) -> &Path {
+        self.path()
+    }
+}
+
 impl Drop for WithDir<'_> {
     /// Resets current working directory to whatever it was
     /// when this instance was created.
