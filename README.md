@@ -24,6 +24,8 @@ WithDir::new(path).map(|_| {
 // cwd is reset
 ```
 
+## [Documentation](https://docs.rs/with_dir)
+
 ## Contributing
 
 Contributions welcome.
