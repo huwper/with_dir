@@ -43,7 +43,7 @@ enum Cwd {
 /// // cwd is reset
 ///
 /// // enter it again
-/// let cwd = WithDir::new(&path).unwrap();
+/// let cwd = WithDir::new("a").unwrap();
 /// // exit it
 /// cwd.leave().unwrap();
 /// ```
@@ -58,13 +58,13 @@ pub struct WithDir<'a> {
 impl<'a> WithDir<'a> {
     /// On creation, the current working directory is set to `path`
     /// and a `parking_lot::ReentrantMutexGuard` is claimed.
-    pub fn new(path: &Path) -> Result<WithDir, std::io::Error> {
+    pub fn new(path: impl AsRef<Path>) -> Result<WithDir<'a>, std::io::Error> {
         let m = DIR_MUTEX.lock();
         let original_dir = current_dir()?;
-        set_current_dir(path)?;
+        set_current_dir(&path)?;
         Ok(WithDir {
             original_dir,
-            cwd: Cwd::NotTemp(path.to_path_buf()),
+            cwd: Cwd::NotTemp(path.as_ref().to_owned()),
             mutex: Some(m),
         })
     }
@@ -87,27 +87,27 @@ impl<'a> WithDir<'a> {
     /// Makes a directory and changes the current working dir to that directory,
     /// the directory will persist after this `WithDir` is dropped. Use
     /// [create_all](crate::WithDir::create_all) if you want to also make the parent directories
-    pub fn create(path: &Path) -> Result<WithDir, std::io::Error> {
+    pub fn create(path: impl AsRef<Path>) -> Result<WithDir<'a>, std::io::Error> {
         let m = DIR_MUTEX.lock();
         let original_dir = current_dir()?;
-        create_dir(path)?;
-        set_current_dir(path)?;
+        create_dir(&path)?;
+        set_current_dir(&path)?;
         Ok(WithDir {
             original_dir,
-            cwd: Cwd::NotTemp(path.to_path_buf()),
+            cwd: Cwd::NotTemp(path.as_ref().to_path_buf()),
             mutex: Some(m),
         })
     }
 
     /// See [create](crate::WithDir::create) for docs
-    pub fn create_all(path: &Path) -> Result<WithDir, std::io::Error> {
+    pub fn create_all(path: impl AsRef<Path>) -> Result<WithDir<'a>, std::io::Error> {
         let m = DIR_MUTEX.lock();
         let original_dir = current_dir()?;
-        create_dir_all(path)?;
-        set_current_dir(path)?;
+        create_dir_all(&path)?;
+        set_current_dir(&path)?;
         Ok(WithDir {
             original_dir,
-            cwd: Cwd::NotTemp(path.to_path_buf()),
+            cwd: Cwd::NotTemp(path.as_ref().to_path_buf()),
             mutex: Some(m),
         })
     }
