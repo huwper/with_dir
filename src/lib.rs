@@ -57,7 +57,7 @@ pub struct WithDir<'a> {
 
 impl<'a> WithDir<'a> {
     /// On creation, the current working directory is set to `path`
-    /// and a `parking_lot::ReentrantMutexGuard` is claimed.
+    /// and a [ReentrantMutexGuard](parking_lot::ReentrantMutexGuard) is claimed.
     pub fn new(path: impl AsRef<Path>) -> Result<WithDir<'a>, std::io::Error> {
         let m = DIR_MUTEX.lock();
         let original_dir = current_dir()?;
@@ -241,5 +241,41 @@ mod tests {
         let t2 = thread::spawn(move || threaded_test_worker(&p2));
         t1.join().unwrap();
         t2.join().unwrap();
+    }
+
+    #[test]
+    fn test_create_dir() {
+        let cwd = current_dir().unwrap();
+        WithDir::create_all(cwd.join("a/create"))
+            .map(|new_dir| {
+                assert_eq!(current_dir().unwrap(), new_dir.path());
+
+                WithDir::create(cwd.join("a/create/b"))
+                    .map(|new_dir| {
+                        assert_eq!(current_dir().unwrap(), new_dir.path());
+                    })
+                    .unwrap();
+            })
+            .unwrap();
+
+        assert_eq!(cwd, current_dir().unwrap());
+        assert!(cwd.join("a/create/b").exists());
+    }
+
+    #[test]
+    fn test_temp_dir() {
+        let cwd = current_dir().unwrap();
+        let mut dir: Option<PathBuf> = None;
+
+        WithDir::temp()
+            .map(|d| {
+                // path we changed to != original path
+                assert_ne!(d.path(), cwd);
+                dir = Some(current_dir().unwrap());
+            })
+            .unwrap();
+
+        // temp dir was deleted
+        assert!(!dir.unwrap().exists());
     }
 }
