@@ -9,7 +9,7 @@ repository = "https://github.com/huwper/with_dir"
 keywords = ["with_dir", "cwd", "with_cwd", "filesystem"]
 
 [dependencies]
-parking_lot = "0.12"
+parking_lot = "0.13"
 tempfile = "3.4"
 
 [dev-dependencies]
